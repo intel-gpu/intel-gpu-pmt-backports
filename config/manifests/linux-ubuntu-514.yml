@@ -1,0 +1,35 @@
+version: '1'
+components:
+  kernel_base:
+    type: git
+    repository: https://github.com/intel-innersource/drivers.gpu.kernel.backporting.releases.git
+    branch: ubuntu20.04/oem/5.14
+    revision: e7a3b771077f26bf1e7f99b1922fbdd14ad3f811
+    clone_depth: 50
+    dest_dir: kernel
+  module_ubuntu20_04:
+    type: git
+    repository: https://github.com/intel-innersource/drivers.gpu.kernel.backporting.releases.git
+    branch: ubuntu20.04/main
+    revision: c90940b5a2fd76f9c5b71847e6f88cb3860468d4
+    clone_depth: 50
+    dest_dir: module
+    comment: Needs Ubuntu oem kernel installed first linux-image-unsigned-5.14.0-1004-oem
+  firmware:
+    type: artifactory
+    root_url: https://gfx-assets-build.fm.intel.com/artifactory
+    asset_path: linux-i915-builds/ci
+    asset_name: prerelease
+    asset_version: linux-i915-ci-prerelease-100
+    asset_patterns:
+    - linux/ubuntu/20.04/intel-fw-*
+    dest_dir: firmware
+  agama:
+    type: artifactory
+    root_url: https://gfx-assets-build.intel.com/artifactory
+    asset_path: agama-builds/ci
+    asset_name: prerelease
+    asset_version: agama-ci-prerelease-222
+    asset_patterns:
+    - linux/ubuntu/20.04/**
+    dest_dir: agama

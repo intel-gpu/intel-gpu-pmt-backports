@@ -112,3 +112,4 @@ To install, run:
 cp $HOME/rpmbuild/RPMS/x86_64/*.rpm .
 sudo dnf install intel-platform-pmt-dkms*.rpm
 ```
+

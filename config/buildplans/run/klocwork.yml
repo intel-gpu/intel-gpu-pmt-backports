@@ -1,0 +1,4 @@
+---
+systems:
+- buildplan: ubuntu-klocwork.yml
+  name: linux/ubuntu

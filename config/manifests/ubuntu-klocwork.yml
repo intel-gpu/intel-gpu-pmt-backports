@@ -1,0 +1,17 @@
+version: '1'
+components:
+  kw_security_scan_21:
+    type: artifactory
+    root_url: https://gfx-assets.intel.com/artifactory
+    asset_path: gfx-security-fm/klocwork/linux
+    asset_name: '21.2'
+    asset_version: '3'
+    dest_dir: klocwork/agent
+  kw_scripts:
+    branch: master
+    clean_on_sync: true
+    dest_dir: klocwork/scripts
+    repository: https://github.com/intel-innersource/drivers.gpu.devops.klocwork
+    type: git
+include:
+- linux-ubuntu-514.yml

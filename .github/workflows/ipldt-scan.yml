@@ -1,0 +1,75 @@
+# This workflow is triggered on new pushes to the branch
+
+name: Scan files with IPLDT
+on: [pull_request, push]
+
+jobs:
+  ipldt_scan:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v2
+
+      - name: Checkout ipldt repository
+        uses: actions/checkout@v2
+        with:
+          repository: "intel-innersource/drivers.gpu.devops.ipldt-automation"
+          ref: 'master'
+          token: ${{ secrets.TOKEN }}
+          path: 'ipldt'
+
+      - name: Checkout PMT IPLDT false hit db
+        uses: actions/checkout@v2
+        with:
+          repository: "intel-sandbox/drivers.platform.kernel.pmt.backporting.ipldt"
+          ref: 'main'
+          token: ${{ secrets.TOKEN }}
+          path: 'false_hit_db'
+
+      - name: Move PMT false hit db to directory that is recognized by the tool
+        run: mkdir ipldt/config/drivers.platform.kernel.pmt.backporting/ && cp false_hit_db/ipldt_false_hit.db ipldt/config/drivers.platform.kernel.pmt.backporting/ipldt_false_hit.db
+
+      - name: Apply temporary fix (until fix is merged to the mainstream)
+        run: sed -i "s/--no-raw-archives\"/--no-raw-archives \"/g" ipldt/ipldt_wrapper.py
+
+      - name: Apply patch to make any matches fail the check.
+        run: sed -i "s/return 0/return ipldt_ouput/g" ipldt/ipldt_wrapper.py
+
+      - name: Create results directory
+        run: rm -rf results && mkdir results
+
+      - name: Create scan directory
+        run: >
+          rm -rf scan_dir_kernel && mkdir scan_dir_kernel &&
+          cp -r drivers scan_dir_kernel/ &&
+          cp -r scripts scan_dir_kernel/
+
+      - name: Run the scan
+        uses: ./.github/actions
+        id: scan
+        continue-on-error: true
+        with:
+          command: >
+            cd ipldt &&
+            python3 ipldt_wrapper.py
+            --scan_dir ../scan_dir_kernel
+            --result_dir ../results
+            --component_project drivers.platform.kernel.pmt.backporting
+            -rf kernel.pmt.${{ github.sha }}
+            -fps '*'
+            --ipldt_bin /opt/ipldt/ipldt3_lin_intel64
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: scan-results-${{ github.sha }}
+          path: results/kernel.pmt.${{ github.sha }}.zip
+
+      - name: Repaste scan result
+        env:
+          SCAN_RESULT: ${{ steps.scan.outcome }}
+        run: >
+          if [ $SCAN_RESULT = "failure" ]; then
+            echo "Some IPLDT matches were found. Please review the report in Actions tab."
+            exit -1
+          fi

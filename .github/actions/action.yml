@@ -1,0 +1,14 @@
+name: "gfx-busybox"
+description: "Run command using gfx-busybox image"
+inputs:
+  command:
+    description: "Command to be run with gfx-busybox"
+    required: true
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    HTTP_PROXY: "http://proxy-dmz.intel.com:911"
+    HTTPS_PROXY: "http://proxy-dmz.intel.com:912"
+  args:
+    - ${{ inputs.command }}
