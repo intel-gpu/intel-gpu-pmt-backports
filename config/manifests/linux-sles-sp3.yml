@@ -1,0 +1,28 @@
+version: '1'
+include: linux.yml
+components:
+  module_sles15_sp3:
+    type: git
+    repository: https://github.com/intel-innersource/drivers.gpu.kernel.backporting.releases.git
+    branch: suse15sp3/main
+    revision: ea9df37cbd4b718fc549dd0fb7a5a4644bfe0a94
+    clone_depth: 20
+    dest_dir: module
+  firmware:
+    type: artifactory
+    root_url: https://gfx-assets-build.fm.intel.com/artifactory
+    asset_path: linux-i915-builds/ci
+    asset_name: prerelease
+    asset_version: linux-i915-ci-prerelease-96
+    asset_patterns:
+    - linux/sles/15sp3/intel-fw-*
+    dest_dir: firmware
+  agama:
+    type: artifactory
+    root_url: https://gfx-assets-build.intel.com/artifactory
+    asset_path: agama-builds/ci
+    asset_name: prerelease
+    asset_version: agama-ci-prerelease-191
+    asset_patterns:
+    - linux/sles/15sp3/**
+    dest_dir: agama

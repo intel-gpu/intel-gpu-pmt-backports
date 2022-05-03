@@ -1,0 +1,4 @@
+---
+systems:
+- buildplan: sles-sp3-klocwork.yml
+  name: linux/sles-sp3

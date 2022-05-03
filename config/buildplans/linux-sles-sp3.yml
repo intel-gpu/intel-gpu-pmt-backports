@@ -1,0 +1,25 @@
+---
+resource: DOCKER_LINUX_DRIVER
+manifest: linux-sles-sp3.yml
+working_dir: ''
+env:
+  CCACHE_DIR: "/ccache"
+  ENABLE_NONFREE_KERNELS: 'yes'
+qb_variable_map:
+  build_version: BUILD_VERSION
+  component_name: COMPONENT_NAME
+  irepo_workspace: WORKSPACE
+  parent_build_id: BUILD_ID
+  build_number: BUILD_NUMBER
+
+types:
+  release-15sp3:
+    env:
+      BUILD_TYPE: Release
+      OS_TYPE: sles15sp3
+    steps:
+    - name: build
+      command: "./config/scripts/build_in_docker.sh"
+    output:
+    - source_dir: "../agama"
+      destination_dir: ./
