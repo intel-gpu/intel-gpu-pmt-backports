@@ -1,0 +1,28 @@
+version: '1'
+include: linux.yml
+components:
+  module:
+    type: git
+    repository: https://github.com/intel-innersource/drivers.gpu.kernel.backporting.releases.git
+    branch: redhat/main
+    revision: bf3e82f7819d92b2c4fbcc2b73e4173b265dd539
+    clone_depth: 50
+    dest_dir: module
+  firmware:
+    type: artifactory
+    root_url: https://gfx-assets-build.fm.intel.com/artifactory
+    asset_path: linux-i915-builds/ci
+    asset_name: prerelease
+    asset_version: linux-i915-ci-prerelease-155
+    asset_patterns:
+    - linux/rhel/8.5/intel-fw-*
+    dest_dir: firmware
+  agama:
+    type: artifactory
+    root_url: https://gfx-assets-build.intel.com/artifactory
+    asset_path: agama-builds/ci
+    asset_name: prerelease
+    asset_version: agama-ci-prerelease-350
+    asset_patterns:
+    - linux/rhel/8.5/**
+    dest_dir: agama
