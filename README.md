@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Intel® Platform Monitoring Technology Backports
 
 This repo holds backports of the pmt driver.
@@ -113,7 +112,3 @@ To install, run:
 cp $HOME/rpmbuild/RPMS/x86_64/*.rpm .
 sudo dnf install intel-platform-pmt-dkms*.rpm
 ```
-=======
-# drivers.platform.kernel.pmt.backporting
-Used for backporting Platform Monitoring Technology driver to sles15sp2
->>>>>>> 9055c7a (initial add)
