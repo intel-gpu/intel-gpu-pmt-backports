@@ -14,7 +14,7 @@ collection within https://github.com/intel-gpu includes:
   - [i915](https://github.com/intel-gpu/intel-gpu-i915-backports) - The main graphics driver (includes a compatible DRM subsystem and dmabuf if necessary).
   - [cse](https://github.com/intel-gpu/intel-gpu-cse-backports) - Converged Security Engine
   - [pmt](https://github.com/intel-gpu/intel-gpu-pmt-backports) - Intel Platform Telemetry
-  - [firmware](https://github.com/intel-gpu/intel-gpu-firmware) - Contains firmware required by i915.  
+  - [firmware](https://github.com/intel-gpu/intel-gpu-firmware) - Contains firmware required by i915.
 
 Each project is tagged consistently so when pulling these repos pull the same tag.
 
@@ -103,7 +103,7 @@ The rpm package will be placed in $HOME/rpmbuild/RPMS/x86_64.
 For example:
 
 ```
-/home/user/rpmbuild/RPMS/x86_64/intel-platform-pmt-dkms-2022.7-1.x86_64.rpm
+/home/user/rpmbuild/RPMS/x86_64/intel-platform-pmt-dkms-*.x86_64.rpm
 ```
 
 To install, run:
