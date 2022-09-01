@@ -20,6 +20,21 @@ struct telem_endpoint_info {
 	struct telem_header	header;
 };
 
+struct pci_dev;
+
+/**
+ * pmt_telem_read() - Read qwords from counter sram using sample id
+ * @pdev:   PCI device inside the Intel vsec
+ * @guid:   GUID of the telemetry space
+ * @pos:    Instance of the guid in case of multiple instances
+ * @id:     The beginning sample id of the metric(s) to be read
+ * @count:  Number of qwords requested
+ * @data:   Allocated qword buffer
+ * * -ENODEV     - The device is not present.
+ * * -EINVAL     - The offset is out out bounds
+ */
+int pmt_telem_read64(struct pci_dev *pdev, u32 guid, u16 pos, u16 id, u16 count, u64 *data);
+
 /* TELEMETRY API */
 
 /**
@@ -85,7 +100,7 @@ int pmt_telem_get_endpoint_info(int devid,
  * Return:
  * * 0           - Success
  * * -ENODEV	 - The device is not present.
- * * -EINVAL	 - The offset is out out bounds
+ * * -EINVAL     - The offset is out bounds
  * * -EPIPE	 - The device was removed during the read. Data written
  *		   but should be considered invalid.
  */
@@ -115,5 +130,4 @@ int pmt_telem_register_notifier(struct notifier_block *nb);
  *
  */
 int pmt_telem_unregister_notifier(struct notifier_block *nb);
-
 #endif

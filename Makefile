@@ -1,26 +1,17 @@
-ifneq ($(KERNELRELEASE),)
-obj-m := drivers/mfd/intel_pmt.o \
-	 drivers/platform/x86/intel_pmt_class.o \
-	 drivers/platform/x86/intel_pmt_telemetry.o \
-	 drivers/platform/x86/intel_pmt_crashlog.o
+DRIVER_DIR = drivers/platform/x86/intel
 
-else
-KDIR ?= /lib/modules/`uname -r`/build
+.PHONY: modules clean modules_install help
+
+OTHER_TARGETS := modules_install help
 
 modules:
-	$(MAKE) -C $(KDIR) M=$$PWD
+	$(MAKE) -C $(DRIVER_DIR)
 	mkdir -p bin
-	cp drivers/mfd/*.ko bin/
-	cp drivers/platform/x86/*.ko bin/
+	cp drivers/platform/x86/intel/*.ko bin/
 
 clean:
-	$(MAKE) -C $(KDIR) M=$$PWD clean
-	rm -rf bin/
+	$(MAKE) -C $(DRIVER_DIR) clean
+	rm -rf bin/ *.out
 
-modules_install:
-	$(MAKE) -C $(KDIR) M=$$PWD modules_install
-
-help:
-	$(MAKE) -C $(KDIR) M=$$PWD help
-
-endif
+$(OTHER_TARGETS):
+	$(MAKE) -C $(DRIVER_DIR) $(MAKECMDGOALS)
