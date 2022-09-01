@@ -31,15 +31,17 @@ export KLIB KLIB_BUILD BACKPORT_DIR KMODDIR KMODPATH_ARG
 # Rpm generated can be copied to client machine and install
 # will trigger source build and install on modules
 #----------------------------------------------------------------------------
-TAR_CONTENT := Makefile* drivers scripts LICENSE
+TAR_CONTENT := Makefile* drivers scripts LICENSE include
 DKMSMKSPEC := $(BACKPORT_DIR)/scripts/backport-mkdkmsspec
 DKMSMKCONF := $(BACKPORT_DIR)/scripts/backport-mkdkmsconf
-MODULE_NAME ?= intel-platform-pmt-dkms
+MODULE_NAME ?= intel-platform-vsec-dkms
 ARCH := x86_64
 
-VERSION := 2021.21
+VERSION := 2022.28
 ifneq ($(BUILD_VERSION), )
 RELEASE := $(BUILD_VERSION)
+else
+$(error "$$BUILD_VERSION not set")
 endif
 
 DEB_ROOT_DIR := $(MODULE_NAME)-$(VERSION)/DEBIAN
@@ -56,7 +58,7 @@ dkmsrpm-pkg:
 
 dkmsdeb-pkg:
 	mkdir -p $(DEB_ROOT_DIR)
-	echo -e "Package: $(MODULE_NAME)\nVersion: $(VERSION)\nArchitecture: `dpkg --print-architecture`\nMaintainer: Intel\nDescription: PMT driver\nReplaces: PMT" > $(DEB_ROOT_DIR)/control
+	echo -e "Package: $(MODULE_NAME)\nVersion: $(VERSION)\nArchitecture: `dpkg --print-architecture`\nMaintainer: Intel\nDescription: Intel Extended Capabilities auxiliary bus driver\nReplaces: intel-platform-pmt-dkms" > $(DEB_ROOT_DIR)/control
 	echo -e "dkms add -m $(MODULE_NAME) -v $(VERSION)\ndkms autoinstall" > $(DEB_ROOT_DIR)/postinst
 	chmod 775 $(DEB_ROOT_DIR)/postinst
 	mkdir -p $(DEB_SRC_DIR)
