@@ -1,12 +1,12 @@
 #!/bin/sh
 #
-#	Output a RPM spec file to generate PMT dkms source
+#	Output a RPM spec file to generate VSEC dkms source
 #
 
 if [ "$1"="" ]; then
 	PKG_NAME="$1"
 else
-	PKG_NAME="intel-platform-pmt-dkms"
+	PKG_NAME="intel-platform-vsec-dkms"
 fi
 
 if [ "$2"="" ]; then
@@ -26,10 +26,11 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	%define version $PKG_VER
 	%define release $REL_NAME
 
-	Summary: Backports PMT Module DKMS Package
+	Summary: Backports VSEC Module DKMS Package
 	Name: %{module}
 	Version: %{version}
 	Release: %{release}
+	Obsoletes: intel-platform-pmt-dkms
 	License: GPL
 	Group: System Environment/Base
 	BuildArch: x86_64
@@ -43,7 +44,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root/
 
 	%description
-	This RPM contains gentree output of the PMT backported module which is needed for building
+	This RPM contains gentree output of the VSEC backported module which is needed for building
 	.ko files
 
 	%prep
@@ -73,7 +74,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 
 	%post
 	/usr/sbin/dkms add -m %module -v %version --rpm_safe_upgrade
-	for i in /usr/src/linux-5.3.18*-obj/x86_64/{default,preempt}; do
+	for i in /usr/src/linux-*-obj/x86_64/{default,preempt}; do
 	K=\$(echo \$i|sed 's:^.*linux-\([^-]*-[^-]*\)-obj/x86_64/\([^$]*\):\1-\2:');
 	/usr/sbin/dkms install --force -m %module -v %version \$K
 	done
