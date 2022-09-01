@@ -9,39 +9,28 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/intel_vsec.h>
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/pci.h>
+#include <linux/pm_runtime.h>
 
-#include "intel_pmt_class.h"
+#include "class.h"
 
 #define PMT_XA_START		1
 #define PMT_XA_MAX		INT_MAX
 #define PMT_XA_LIMIT		XA_LIMIT(PMT_XA_START, PMT_XA_MAX)
 
-/*
- * Early implementations of PMT on client platforms have some
- * differences from the server platforms (which use the Out Of Band
- * Management Services Module OOBMSM). This list tracks those
- * platforms as needed to handle those differences. Newer client
- * platforms are expected to be fully compatible with server.
- */
-static const struct pci_device_id pmt_telem_early_client_pci_ids[] = {
-	{ PCI_VDEVICE(INTEL, 0x467d) }, /* ADL */
-	{ PCI_VDEVICE(INTEL, 0x56C0) }, /* ATS_M150 */
-	{ PCI_VDEVICE(INTEL, 0x56C1) }, /* ATS_M75 */
-	{ PCI_VDEVICE(INTEL, 0x490e) }, /* DG1 */
-	{ PCI_VDEVICE(INTEL, 0x4f93) }, /* DG2_G10 */
-	{ PCI_VDEVICE(INTEL, 0x4f95) }, /* DG1_G11 */
-	{ PCI_VDEVICE(INTEL, 0x9a0d) }, /* TGL */
-	{ }
-};
-
 bool intel_pmt_is_early_client_hw(struct device *dev)
 {
-	struct pci_dev *parent = to_pci_dev(dev->parent);
+	struct intel_vsec_device *ivdev = dev_to_ivdev(dev);
 
-	return !!pci_match_id(pmt_telem_early_client_pci_ids, parent);
+	/*
+	 * Early implementations of PMT on client platforms have some
+	 * differences from the server platforms (which use the Out Of Band
+	 * Management Services Module OOBMSM).
+	 */
+	return !!(ivdev->info->quirks & VSEC_QUIRK_EARLY_HW);
 }
 EXPORT_SYMBOL_GPL(intel_pmt_is_early_client_hw);
 
@@ -66,7 +55,10 @@ intel_pmt_read(struct file *filp, struct kobject *kobj,
 	if (count > entry->size - off)
 		count = entry->size - off;
 
+	pm_runtime_get_sync(&entry->pdev->dev);
 	memcpy_fromio(buf, entry->base + off, count);
+	pm_runtime_mark_last_busy(&entry->pdev->dev);
+	pm_runtime_put_autosuspend(&entry->pdev->dev);
 
 	return count;
 }
@@ -97,6 +89,9 @@ intel_pmt_mmap(struct file *filp, struct kobject *kobj,
 	if (io_remap_pfn_range(vma, vma->vm_start, pfn,
 		vsize, vma->vm_page_prot))
 		return -EAGAIN;
+
+	pm_runtime_get_sync(&entry->pdev->dev);
+	pm_runtime_forbid(&entry->pdev->dev);
 
 	return 0;
 }
@@ -142,9 +137,10 @@ static struct class intel_pmt_class = {
 	.dev_groups = intel_pmt_groups,
 };
 
-int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
-			     struct intel_pmt_header *header,
-			     struct device *dev, struct resource *disc_res)
+static int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
+				    struct intel_pmt_header *header,
+				    struct device *dev,
+				    struct resource *disc_res)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev->parent);
 	u8 bir;
@@ -174,19 +170,26 @@ int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
 		entry->base_addr = disc_res->end + 1 + header->base_offset;
 
 		/*
-		 * Early client hardware used a different calcultion for the
-		 * base offset from server (OOBMSM based) platforms. On these
-		 * systems local refers to an address in the same bar the header
-		 * but at a fixed instead of relative offset.
+		 * Some hardware use a different calculation for the base address
+		 * when access_type == ACCESS_LOCAL. On the these systems
+		 * ACCCESS_LOCAL refers to an address in the same BAR as the
+		 * header but at a fixed offset. But as the header address was
+		 * supplied to the driver, we don't know which BAR it was in.
+		 * So search for the bar whose range includes the header address.
 		 */
 		if (intel_pmt_is_early_client_hw(dev)) {
-			unsigned long pf_addr, mask;
+			int i;
 
-			dev_dbg(dev, "Applying base_offset quirk\n");
-			pf_addr = PFN_PHYS(PHYS_PFN(disc_res->start)) +
-					   header->base_offset;
-			mask = ~GENMASK(fls(header->base_offset), 0);
-			entry->base_addr = (pf_addr & mask) + header->base_offset;
+			entry->base_addr = 0;
+			for (i = 0; i < 6; i++)
+				if (disc_res->start >= pci_resource_start(pci_dev, i) &&
+				   (disc_res->start <= pci_resource_end(pci_dev, i))) {
+					entry->base_addr = pci_resource_start(pci_dev, i) +
+							   header->base_offset;
+					break;
+				}
+			if (!entry->base_addr)
+				return -EINVAL;
 		}
 
 		dev_dbg(dev, "LOCAL base address 0x%lx\b", entry->base_addr);
@@ -213,13 +216,12 @@ int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(intel_pmt_populate_entry);
 
 static int intel_pmt_dev_register(struct intel_pmt_entry *entry,
 				  struct intel_pmt_namespace *ns,
 				  struct device *parent)
 {
-	struct resource res;
+	struct resource res = {0};
 	struct device *dev;
 	int ret;
 
@@ -240,6 +242,7 @@ static int intel_pmt_dev_register(struct intel_pmt_entry *entry,
 	}
 
 	entry->kobj = &dev->kobj;
+	entry->pdev = to_pci_dev(parent->parent);
 
 	if (ns->attr_grp) {
 		ret = sysfs_create_group(entry->kobj, ns->attr_grp);
@@ -287,31 +290,29 @@ fail_dev_create:
 	return ret;
 }
 
-int intel_pmt_dev_create(struct intel_pmt_entry *entry,
-			 struct intel_pmt_namespace *ns,
-			 struct platform_device *pdev, int idx)
+int intel_pmt_dev_create(struct intel_pmt_entry *entry, struct intel_pmt_namespace *ns,
+			 struct intel_vsec_device *intel_vsec_dev, int idx)
 {
+	struct device *dev = &intel_vsec_dev->auxdev.dev;
 	struct intel_pmt_header header;
 	struct resource	*disc_res;
-	int ret = -ENODEV;
+	int ret;
 
-	disc_res = platform_get_resource(pdev, IORESOURCE_MEM, idx);
-	if (!disc_res)
-		return ret;
+	disc_res = &intel_vsec_dev->resource[idx];
 
-	entry->disc_table = devm_platform_ioremap_resource(pdev, idx);
+	entry->disc_table = devm_ioremap_resource(dev, disc_res);
 	if (IS_ERR(entry->disc_table))
 		return PTR_ERR(entry->disc_table);
 
-	ret = ns->pmt_header_decode(entry, &header, &pdev->dev, disc_res);
+	ret = ns->pmt_header_decode(entry, &header, dev);
 	if (ret)
 		return ret;
 
-	ret = intel_pmt_populate_entry(entry, &header, &pdev->dev, disc_res);
+	ret = intel_pmt_populate_entry(entry, &header, dev, disc_res);
 	if (ret)
 		return ret;
 
-	return intel_pmt_dev_register(entry, ns, &pdev->dev);
+	return intel_pmt_dev_register(entry, ns, dev);
 
 }
 EXPORT_SYMBOL_GPL(intel_pmt_dev_create);
