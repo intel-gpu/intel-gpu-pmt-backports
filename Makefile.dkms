@@ -56,7 +56,7 @@ dkmsrpm-pkg:
 
 dkmsdeb-pkg:
 	mkdir -p $(DEB_ROOT_DIR)
-	echo -e "Package: PMT\nVersion: $(VERSION)\nArchitecture: `dpkg --print-architecture`\nMaintainer: Intel\nDescription: PMT driver" > $(DEB_ROOT_DIR)/control
+	echo -e "Package: $(MODULE_NAME)\nVersion: $(VERSION)\nArchitecture: `dpkg --print-architecture`\nMaintainer: Intel\nDescription: Intel Extended Capabilities auxiliary bus driver\nReplaces: intel-platform-pmt-dkms" > $(DEB_ROOT_DIR)/control
 	echo -e "dkms add -m $(MODULE_NAME) -v $(VERSION)\ndkms autoinstall" > $(DEB_ROOT_DIR)/postinst
 	chmod 775 $(DEB_ROOT_DIR)/postinst
 	mkdir -p $(DEB_SRC_DIR)

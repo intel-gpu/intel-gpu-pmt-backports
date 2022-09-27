@@ -30,6 +30,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	Name: %{module}
 	Version: %{version}
 	Release: %{release}
+	Obsoletes: intel-platform-pmt-dkms
 	License: GPL
 	Group: System Environment/Base
 	BuildArch: x86_64
