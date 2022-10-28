@@ -8,7 +8,7 @@
  * Author: "Alexander Duyck" <alexander.h.duyck@linux.intel.com>
  */
 
-#include <linux/auxiliary_bus.h>
+#include <backport/linux/auxiliary_bus.h>
 #include <linux/kernel.h>
 #include <linux/intel_vsec.h>
 #include <linux/module.h>
@@ -224,7 +224,8 @@ static const struct attribute_group pmt_crashlog_group = {
 
 static int pmt_crashlog_header_decode(struct intel_pmt_entry *entry,
 				      struct intel_pmt_header *header,
-				      struct device *dev)
+				      struct device *dev,
+				      struct resource *disc_res)
 {
 	void __iomem *disc_table = entry->disc_table;
 	struct crashlog_entry *crashlog;
@@ -259,7 +260,7 @@ static struct intel_pmt_namespace pmt_crashlog_ns = {
  */
 static void pmt_crashlog_remove(struct auxiliary_device *auxdev)
 {
-	struct pmt_crashlog_priv *priv = dev_get_drvdata(&auxdev->dev);
+	struct pmt_crashlog_priv *priv = auxiliary_get_drvdata(auxdev);
 	int i;
 
 	for (i = 0; i < priv->num_entries; i++)
@@ -279,7 +280,7 @@ static int pmt_crashlog_probe(struct auxiliary_device *auxdev,
 	if (!priv)
 		return -ENOMEM;
 
-	dev_set_drvdata(&auxdev->dev, priv);
+	auxiliary_set_drvdata(auxdev, priv);
 
 	for (i = 0; i < intel_vsec_dev->num_resources; i++) {
 		struct intel_pmt_entry *entry = &priv->entry[i].entry;

@@ -13,6 +13,10 @@
 #define INTEL_DVSEC_TABLE_OFFSET(x)	((x) & GENMASK(31, 3))
 #define TABLE_OFFSET_SHIFT		3
 
+/* Intel Virtual DVSEC capability vendor space offsets */
+#define PMWRBASE_OFFSET			0x14
+#define READ_LPM_TELEM_OFFSET		0x1C
+
 struct pci_dev;
 struct resource;
 
@@ -38,14 +42,21 @@ struct intel_vsec_header {
 	u8	rev;
 	u16	length;
 	u16	id;
-	u8	num_entries;
 	u16	cap_id;
 	u8	cap_ver;
 	u32	next_cap_offset;
 	u32	venid;
+	u8	num_entries;
 	u8	entry_size;
 	u8	tbir;
 	u32	offset;
+};
+
+/* Platform specific data */
+struct intel_vsec_platform_info {
+	struct intel_vsec_header **capabilities;
+	unsigned long quirks;
+	s32 base_adjust;
 };
 
 enum intel_vsec_quirks {
@@ -68,12 +79,6 @@ enum intel_vsec_quirks {
 	VSEC_QUIRK_VDVSEC	= BIT(5),
 };
 
-/* Platform specific data */
-struct intel_vsec_platform_info {
-	struct intel_vsec_header **capabilities;
-	unsigned long quirks;
-};
-
 struct intel_vsec_device {
 	struct auxiliary_device auxdev;
 	struct pci_dev *pcidev;
@@ -84,6 +89,10 @@ struct intel_vsec_device {
 	void *priv_data;
 	size_t priv_data_size;
 };
+
+int intel_vsec_add_aux(struct pci_dev *pdev, struct device *parent,
+		       struct intel_vsec_device *intel_vsec_dev,
+		       const char *name);
 
 static inline struct intel_vsec_device *dev_to_ivdev(struct device *dev)
 {
