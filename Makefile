@@ -4,7 +4,10 @@ DRIVER_DIR = drivers/platform/x86/intel
 
 OTHER_TARGETS := modules_install help
 
-modules:
+include/generated_osv_version.h:
+	scripts/generate_osv_version_h.sh > $@
+
+modules: include/generated_osv_version.h
 	$(MAKE) -C $(DRIVER_DIR)
 	mkdir -p bin
 	cp drivers/platform/x86/intel/*.ko bin/

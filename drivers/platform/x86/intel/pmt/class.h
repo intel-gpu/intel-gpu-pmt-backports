@@ -48,6 +48,7 @@ struct intel_pmt_entry {
 	void __iomem		*disc_table;
 	void __iomem		*base;
 	unsigned long		base_addr;
+	s32			base_adjust;
 	size_t			size;
 	u32			guid;
 	int			devid;
@@ -59,10 +60,15 @@ struct intel_pmt_namespace {
 	const struct attribute_group *attr_grp;
 	int (*pmt_header_decode)(struct intel_pmt_entry *entry,
 				 struct intel_pmt_header *header,
-				 struct device *dev);
+				 struct device *dev,
+				 struct resource *disc_res);
 };
 
 bool intel_pmt_is_early_client_hw(struct device *dev);
+int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
+			     struct intel_pmt_header *header,
+			     struct device *dev,
+				 struct resource *disc_res);
 int intel_pmt_dev_create(struct intel_pmt_entry *entry,
 			 struct intel_pmt_namespace *ns,
 			 struct intel_vsec_device *dev, int idx);

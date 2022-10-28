@@ -8,7 +8,7 @@
  * Author: "David E. Box" <david.e.box@linux.intel.com>
  */
 
-#include <linux/auxiliary_bus.h>
+#include <backport/linux/auxiliary_bus.h>
 #include <linux/kernel.h>
 #include <linux/intel_vsec.h>
 #include <linux/module.h>
@@ -32,6 +32,12 @@
 /* Used by client hardware to identify a fixed telemetry entry*/
 #define TELEM_CLIENT_FIXED_BLOCK_GUID	0x10000000
 
+enum telem_type {
+	TELEM_TYPE_PUNIT = 0,
+	TELEM_TYPE_CRASHLOG,
+	TELEM_TYPE_PUNIT_FIXED,
+};
+
 #define NUM_BYTES_QWORD(v)	((v) << 3)
 #define SAMPLE_ID_OFFSET(v)	((v) << 3)
 
@@ -41,12 +47,6 @@
 
 static DEFINE_MUTEX(list_lock);
 static BLOCKING_NOTIFIER_HEAD(telem_notifier);
-
-enum telem_type {
-	TELEM_TYPE_PUNIT = 0,
-	TELEM_TYPE_CRASHLOG,
-	TELEM_TYPE_PUNIT_FIXED,
-};
 
 struct pmt_telem_priv {
 	int				num_entries;
@@ -73,7 +73,8 @@ static bool pmt_telem_region_overlaps(struct intel_pmt_entry *entry,
 
 static int pmt_telem_header_decode(struct intel_pmt_entry *entry,
 				   struct intel_pmt_header *header,
-				   struct device *dev)
+				   struct device *dev,
+				   struct resource *disc_res)
 {
 	void __iomem *disc_table = entry->disc_table;
 
@@ -83,6 +84,12 @@ static int pmt_telem_header_decode(struct intel_pmt_entry *entry,
 	header->access_type = TELEM_ACCESS(readl(disc_table));
 	header->guid = readl(disc_table + TELEM_GUID_OFFSET);
 	header->base_offset = readl(disc_table + TELEM_BASE_OFFSET);
+	if (entry->base_adjust) {
+		u32 new_base = header->base_offset + entry->base_adjust;
+		dev_dbg(dev, "Adjusting baseoffset from 0x%x to 0x%x\n",
+			header->base_offset, new_base);
+		header->base_offset = new_base;
+	}
 
 	/* Size is measured in DWORDS, but accessor returns bytes */
 	header->size = TELEM_SIZE(readl(disc_table));
@@ -132,7 +139,7 @@ int pmt_telem_read64(struct pci_dev *pdev, u32 guid, u16 pos, u16 id, u16 count,
 	if (!found)
 		return -ENODEV;
 
-	priv = dev_get_drvdata(&intel_vsec_dev->auxdev.dev);
+	priv = auxiliary_get_drvdata(&intel_vsec_dev->auxdev);
 	found = false;
 
 	for (entry = priv->entry, i = 0; i < priv->num_entries; entry++, i++) {
@@ -324,7 +331,7 @@ static int pmt_telem_add_endpoint(struct device *dev,
 
 static void pmt_telem_remove(struct auxiliary_device *auxdev)
 {
-	struct pmt_telem_priv *priv = dev_get_drvdata(&auxdev->dev);
+	struct pmt_telem_priv *priv = auxiliary_get_drvdata(auxdev);
 	struct intel_pmt_entry *entry;
 	int i;
 
@@ -356,12 +363,11 @@ static int pmt_telem_probe(struct auxiliary_device *auxdev, const struct auxilia
 	if (!priv)
 		return -ENOMEM;
 
-	dev_set_drvdata(&auxdev->dev, priv);
+	auxiliary_set_drvdata(auxdev, priv);
 
-	for (i = 0, entry = &priv->entry[priv->num_entries];
-	     i < intel_vsec_dev->num_resources;
-	     i++, entry++) {
+	for (i = 0, entry = priv->entry; i < intel_vsec_dev->num_resources; i++, entry++) {
 		dev_dbg(&auxdev->dev, "Getting resource %d\n", i);
+		entry->base_adjust = intel_vsec_dev->info->base_adjust;
 		ret = intel_pmt_dev_create(entry, &pmt_telem_ns, intel_vsec_dev, i);
 		if (ret < 0)
 			goto abort_probe;
