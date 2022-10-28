@@ -55,10 +55,7 @@ intel_pmt_read(struct file *filp, struct kobject *kobj,
 	if (count > entry->size - off)
 		count = entry->size - off;
 
-	pm_runtime_get_sync(&entry->pdev->dev);
 	memcpy_fromio(buf, entry->base + off, count);
-	pm_runtime_mark_last_busy(&entry->pdev->dev);
-	pm_runtime_put_autosuspend(&entry->pdev->dev);
 
 	return count;
 }
@@ -89,9 +86,6 @@ intel_pmt_mmap(struct file *filp, struct kobject *kobj,
 	if (io_remap_pfn_range(vma, vma->vm_start, pfn,
 		vsize, vma->vm_page_prot))
 		return -EAGAIN;
-
-	pm_runtime_get_sync(&entry->pdev->dev);
-	pm_runtime_forbid(&entry->pdev->dev);
 
 	return 0;
 }
@@ -137,10 +131,10 @@ static struct class intel_pmt_class = {
 	.dev_groups = intel_pmt_groups,
 };
 
-static int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
-				    struct intel_pmt_header *header,
-				    struct device *dev,
-				    struct resource *disc_res)
+int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
+			     struct intel_pmt_header *header,
+			     struct device *dev,
+				 struct resource *disc_res)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev->parent);
 	u8 bir;
@@ -216,6 +210,7 @@ static int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(intel_pmt_populate_entry);
 
 static int intel_pmt_dev_register(struct intel_pmt_entry *entry,
 				  struct intel_pmt_namespace *ns,
@@ -304,7 +299,7 @@ int intel_pmt_dev_create(struct intel_pmt_entry *entry, struct intel_pmt_namespa
 	if (IS_ERR(entry->disc_table))
 		return PTR_ERR(entry->disc_table);
 
-	ret = ns->pmt_header_decode(entry, &header, dev);
+	ret = ns->pmt_header_decode(entry, &header, dev, disc_res);
 	if (ret)
 		return ret;
 

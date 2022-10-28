@@ -37,34 +37,39 @@ DKMSMKCONF := $(BACKPORT_DIR)/scripts/backport-mkdkmsconf
 MODULE_NAME ?= intel-platform-vsec-dkms
 ARCH := x86_64
 
-VERSION := 2022.28
+VERSION := 2022.43
 ifneq ($(BUILD_VERSION), )
 RELEASE := $(BUILD_VERSION)
 else
 $(error "$$BUILD_VERSION not set")
 endif
 
-DEB_ROOT_DIR := $(MODULE_NAME)-$(VERSION)/DEBIAN
-DEB_SRC_DIR := $(MODULE_NAME)-$(VERSION)/usr/src/$(MODULE_NAME)-$(VERSION)
+DEB_PACKAGE_NAME := $(MODULE_NAME)-$(VERSION)-$(RELEASE)_amd64
+DEB_ROOT_DIR := $(DEB_PACKAGE_NAME)/DEBIAN
+DEB_SRC_DIR := $(DEB_PACKAGE_NAME)/usr/src/$(MODULE_NAME)-$(VERSION)-$(RELEASE)
 
+include/generated_osv_version.h:
+	scripts/generate_osv_version_h.sh > $@
+	
 .PHONY: dkmsrpm-pkg dkmsdeb-pkg
-dkmsrpm-pkg:
+dkmsrpm-pkg: include/generated_osv_version.h
 	$(CONFIG_SHELL) $(DKMSMKCONF) $(MODULE_NAME) $(VERSION) $(RELEASE) > $(BACKPORT_DIR)/dkms.conf
 	$(CONFIG_SHELL) $(DKMSMKSPEC) $(MODULE_NAME) $(VERSION) $(RELEASE) > $(BACKPORT_DIR)/$(MODULE_NAME).spec
-	tar -cz $(RCS_TAR_IGNORE) -f $(MODULE_NAME)-$(VERSION)-src.tar.gz \
+	tar -cz $(RCS_TAR_IGNORE) -f $(MODULE_NAME)-$(VERSION)-$(RELEASE)-src.tar.gz \
 		$(TAR_CONTENT) $(MODULE_NAME).spec dkms.conf;
-	+rpmbuild $(RPMOPTS) --target $(ARCH) -ta $(MODULE_NAME)-$(VERSION)-src.tar.gz \
+	+rpmbuild $(RPMOPTS) --target $(ARCH) -ta $(MODULE_NAME)-$(VERSION)-$(RELEASE)-src.tar.gz \
 	--define='_smp_mflags %{nil}'
 
-dkmsdeb-pkg:
+dkmsdeb-pkg: include/generated_osv_version.h
 	mkdir -p $(DEB_ROOT_DIR)
-	echo -e "Package: $(MODULE_NAME)\nVersion: $(VERSION)\nArchitecture: `dpkg --print-architecture`\nMaintainer: Intel\nDescription: Intel Extended Capabilities auxiliary bus driver\nReplaces: intel-platform-pmt-dkms" > $(DEB_ROOT_DIR)/control
-	echo -e "dkms add -m $(MODULE_NAME) -v $(VERSION)\ndkms autoinstall" > $(DEB_ROOT_DIR)/postinst
-	chmod 775 $(DEB_ROOT_DIR)/postinst
+	echo -e "Package: $(MODULE_NAME)\nVersion: $(VERSION)-$(RELEASE)\nArchitecture: `dpkg --print-architecture`\nSection: kernel\nMaintainer: Intel\nDescription: Intel Extended Capabilities auxiliary bus driver\nReplaces: intel-platform-pmt-dkms" > $(DEB_ROOT_DIR)/control
+	echo -e "dkms add -m $(MODULE_NAME) -v $(VERSION)-$(RELEASE)\ndkms autoinstall" > $(DEB_ROOT_DIR)/postinst
+	echo -e "dkms remove -m $(MODULE_NAME)/$(VERSION)-$(RELEASE) --all" > $(DEB_ROOT_DIR)/prerm
+	chmod 775 $(DEB_ROOT_DIR)/{postinst,prerm}
 	mkdir -p $(DEB_SRC_DIR)
 	$(CONFIG_SHELL) $(DKMSMKCONF) $(MODULE_NAME) $(VERSION) $(RELEASE) > $(DEB_SRC_DIR)/dkms.conf
 	$(CONFIG_SHELL) $(DKMSMKSPEC) $(MODULE_NAME) $(VERSION) $(RELEASE) > $(DEB_SRC_DIR)/$(MODULE_NAME).spec
 	cp -r $(TAR_CONTENT) $(DEB_SRC_DIR)
 
-	+dpkg-deb --root-owner-group --build $(MODULE_NAME)-$(VERSION)
+	+dpkg-deb --root-owner-group --build $(DEB_PACKAGE_NAME)
 endif
