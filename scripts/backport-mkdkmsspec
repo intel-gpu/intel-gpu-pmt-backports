@@ -37,7 +37,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	Vendor: Intel
 	Provides: %{module}
 	Packager: linux-graphics@intel.com
-	Requires: dkms gcc bash sed lsb-release
+	Requires: dkms gcc bash sed
 	# There is no Source# line for dkms.conf since it has been placed
 	# into the source tarball of SOURCE0
 	Source0: %{module}-%{version}-src.tar.gz
@@ -78,11 +78,13 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	K=\$(echo \$i|sed 's:^.*linux-\([^-]*-[^-]*\)-obj/x86_64/\([^$]*\):\1-\2:');
 	/usr/sbin/dkms install --force -m %module -v %version \$K
 	done
+	cp %{buildroot}/usr/src/%{module}-%{version}/dkms.conf /var/lib/dkms/%{module}/%{version}/source/dkms.conf
 	exit 0
 
 	%preun
-	echo -e
 	echo -e "Uninstall of %{module} module (version %{version}) beginning:"
-	/usr/sbin/dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
+	/usr/sbin/dkms uninstall --force -m %{module} -v %{version}-%{release}
+	/usr/sbin/dkms remove -m %{module} -v %{version}-%{release} --all --rpm_safe_upgrade
+	echo -e "Uninstall done."
 	exit 0
 EOF
