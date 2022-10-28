@@ -56,6 +56,6 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	  fi
 	}
 
-	MAKE="'make' -j\$(num_cpu_cores) KDIR=/lib/modules/\$kernelver/build"
+	MAKE="'make' -j\$(num_cpu_cores) KDIR=/lib/modules/\$kernelver/build modules"
 	CLEAN="'make' clean"
 EOF
