@@ -21,6 +21,8 @@ else
 	REL_NAME="1"
 fi
 
+KERNEL_PATTERN=$(sh scripts/generate_kernel_pattern.sh)
+
 sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	%define module $PKG_NAME
 	%define version $PKG_VER
@@ -75,7 +77,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 
 	%post
 	/usr/sbin/dkms add -m %module -v %{version}-%{release} --rpm_safe_upgrade
-	for i in /lib/modules/*; do
+	for i in /lib/modules/$KERNEL_PATTERN*; do
 		H="\$i/build";
 		K=\$(echo \$i | cut -d '/' -f 4);
 		if [ -d \$H ]; then
