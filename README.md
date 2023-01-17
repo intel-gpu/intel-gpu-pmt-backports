@@ -34,9 +34,6 @@ sudo apt install \
 ```
 
 #### Create debian package:
-
-NOTE: use OS_TYPE=ubuntu_20.04 for kernel 5.14, for kernel 5.15 or 5.17 use OS_TYPE=ubuntu_22.04.
-
 ```
 export OS_TYPE=ubuntu_20.04
 BUILD_VERSION=1 make -f Makefile.dkms dkmsdeb-pkg
@@ -119,4 +116,39 @@ To install, run:
 ```
 cp $HOME/rpmbuild/RPMS/x86_64/*.rpm .
 sudo dnf install intel-platform-pmt-dkms*.rpm
+```
+
+## How to generate the binary package
+
+### SLES 15SP4
+
+#### Install dependencies:
+
+```
+sudo zypper install \
+   make \
+   linux-glibc-devel \
+   lsb-release \
+   rpm-build
+```
+
+#### Build and install dkms package
+```
+export OS_TYPE=sles
+export OS_VERSION=15sp4
+make -f Makefile.dkms BUILD_VERSION=1 binrpm-pkg
+```
+
+The rpm package will be placed in $HOME/rpmbuild/RPMS/x86_64/.
+For example:
+
+```
+/home/user/rpmbuild/RPMS/x86_64/intel-platform-vsec-kmp-default-2022.46.1_k5.14.21_150400.24.21-1.x86_64.rpm
+```
+
+Install with:
+
+```
+cp $HOME/rpmbuild/RPMS/x86_64/intel-platform-vsec*.rpm .
+sudo rpm -ivh intel-platform-vsec*.rpm
 ```
