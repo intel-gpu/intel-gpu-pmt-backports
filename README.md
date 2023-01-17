@@ -48,42 +48,35 @@ sudo zypper install --allow-unsigned-rpm \
     /usr/src/packages/RPMS/x86_64/intel-platform-pmt-dkms-*.rpm
 ```
 
-### RHEL 8.4
+## How to generate the binary package
+
+### SLES 15SP3
 
 #### Install dependencies:
 
-
 ```
-sudo dnf install \
-   git \
-   kernel-headers \
+sudo zypper install \
    make \
+   linux-glibc-devel \
+   lsb-release \
    rpm-build
 ```
 
-Install dkms subsystem support:
-
+#### Build and install binary package
 ```
-git clone https://github.com/dell/dkms dkms
-cd dkms
-make install-redhat
+make -f Makefile.dkms BUILD_VERSION=1 binrpm-pkg
 ```
 
-#### Build and install dkms package
-```
-make -f Makefile.dkms BUILD_VERSION=1 dkmsrpm-pkg
-```
-
-The rpm package will be placed in $HOME/rpmbuild/RPMS/x86_64.
+The rpm package will be placed in driver's directory in $HOME/rpmbuild/RPMS/x86_64/.
 For example:
 
 ```
-/home/user/rpmbuild/RPMS/x86_64/intel-platform-pmt-dkms-2022.7-1.x86_64.rpm
+/home/user/rpmbuild/RPMS/x86_64/intel-platform-pmt-kmp-default-2022.42_k5.3.18_150300.59.93-1.x86_64.rpm
 ```
 
-To install, run:
+Install with:
 
 ```
 cp $HOME/rpmbuild/RPMS/x86_64/*.rpm .
-sudo dnf install intel-platform-pmt-dkms*.rpm
+sudo rpm -ivh intel-platform-pmt*.rpm
 ```
