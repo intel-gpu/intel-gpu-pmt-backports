@@ -18,6 +18,7 @@
 #include <linux/overflow.h>
 
 #include "class.h"
+#include "version/module_version.h"
 
 /* Crashlog discovery header types */
 #define CRASH_TYPE_OOBMSM	1
@@ -329,3 +330,4 @@ module_exit(pmt_crashlog_exit);
 MODULE_AUTHOR("Alexander Duyck <alexander.h.duyck@linux.intel.com>");
 MODULE_DESCRIPTION("Intel PMT Crashlog driver");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION(BACKPORT_MODULE_VER);

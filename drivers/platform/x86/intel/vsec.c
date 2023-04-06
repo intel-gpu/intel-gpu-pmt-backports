@@ -25,6 +25,8 @@
 #include <linux/types.h>
 #include <linux/version.h>
 
+#include "version/module_version.h"
+
 /* OOT module defines */
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(5,17,0)
 #define PCI_EXT_CAP_ID_DVSEC		0x23
@@ -525,3 +527,4 @@ module_pci_driver(intel_vsec_pci_driver);
 MODULE_AUTHOR("David E. Box <david.e.box@linux.intel.com>");
 MODULE_DESCRIPTION("Intel Extended Capabilities auxiliary bus driver");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION(BACKPORT_MODULE_VER);

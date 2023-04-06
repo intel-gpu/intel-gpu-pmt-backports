@@ -56,6 +56,6 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
 	  fi
 	}
 
-	MAKE="'make' -j\$(num_cpu_cores) KDIR=/lib/modules/\$kernelver/build modules; mkdir -p \$dkms_tree/$PKG_NAME/$PKG_VER-$REL_NAME/\$kernelver/x86_64/build/; cp drivers/platform/x86/intel/Module.symvers \$dkms_tree/$PKG_NAME/$PKG_VER-$REL_NAME/\$kernelver/x86_64/build/"
+	MAKE="'make' -j\$(num_cpu_cores) KDIR=/lib/modules/\$kernelver/build modules MODULE_VERSION=$PKG_VER-$REL_NAME; mkdir -p \$dkms_tree/$PKG_NAME/$PKG_VER-$REL_NAME/\$kernelver/x86_64/build/; cp drivers/platform/x86/intel/Module.symvers \$dkms_tree/$PKG_NAME/$PKG_VER-$REL_NAME/\$kernelver/x86_64/build/"
 	CLEAN="'make' clean"
 EOF
