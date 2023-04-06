@@ -4,6 +4,13 @@ obj-m := drivers/mfd/intel_pmt.o \
 	 drivers/platform/x86/intel_pmt_telemetry.o \
 	 drivers/platform/x86/intel_pmt_crashlog.o
 
+INCLUDES = -I$(src)/include
+ccflags-y := $(INCLUDES)
+
+ccflags-y += -DDISTRO_NAME="$(shell cat /etc/os-release | grep PRETTY_NAME | sed 's/PRETTY_NAME="//;s/"//' | sed 's/ /-/g')" \
+			 -DKERNEL_VERSION_NAME="$(shell uname -r)" \
+			 -DPMT_BACKPORT_VERSION="$(MODULE_VERSION)"
+
 else
 KDIR ?= /lib/modules/`uname -r`/build
 

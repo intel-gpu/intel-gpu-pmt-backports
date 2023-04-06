@@ -18,6 +18,8 @@
 #include <linux/pm_runtime.h>
 #include <linux/types.h>
 
+#include "version/module_version.h"
+
 /* Intel DVSEC capability vendor space offsets */
 #define INTEL_DVSEC_ENTRIES		0xA
 #define INTEL_DVSEC_SIZE		0xB
@@ -300,3 +302,4 @@ module_pci_driver(pmt_pci_driver);
 MODULE_AUTHOR("David E. Box <david.e.box@linux.intel.com>");
 MODULE_DESCRIPTION("Intel Platform Monitoring Technology PMT driver");
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION(BACKPORT_MODULE_VER);

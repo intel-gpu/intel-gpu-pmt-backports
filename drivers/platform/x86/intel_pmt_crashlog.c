@@ -16,6 +16,7 @@
 #include <linux/overflow.h>
 
 #include "intel_pmt_class.h"
+#include "version/module_version.h"
 
 #define DRV_NAME		"pmt_crashlog"
 
@@ -327,3 +328,4 @@ MODULE_AUTHOR("Alexander Duyck <alexander.h.duyck@linux.intel.com>");
 MODULE_DESCRIPTION("Intel PMT Crashlog driver");
 MODULE_ALIAS("platform:" DRV_NAME);
 MODULE_LICENSE("GPL v2");
+MODULE_VERSION(BACKPORT_MODULE_VER);
