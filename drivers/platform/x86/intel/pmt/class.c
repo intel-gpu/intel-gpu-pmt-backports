@@ -9,6 +9,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/io-64-nonatomic-lo-hi.h>
 #include <linux/intel_vsec.h>
 #include <linux/module.h>
 #include <linux/mm.h>
@@ -21,6 +22,7 @@
 #define PMT_XA_START		1
 #define PMT_XA_MAX		INT_MAX
 #define PMT_XA_LIMIT		XA_LIMIT(PMT_XA_START, PMT_XA_MAX)
+#define GUID_SPR_PUNIT		0x9956f43f
 
 bool intel_pmt_is_early_client_hw(struct device *dev)
 {
@@ -34,6 +36,29 @@ bool intel_pmt_is_early_client_hw(struct device *dev)
 	return !!(ivdev->info->quirks & VSEC_QUIRK_EARLY_HW);
 }
 EXPORT_SYMBOL_GPL(intel_pmt_is_early_client_hw);
+
+static inline int
+pmt_memcpy64_fromio(void *to, const u64 __iomem *from, size_t count)
+{
+	int i, remain;
+	u64 *buf = to;
+
+	if (!IS_ALIGNED((unsigned long)from, 8))
+		return -EFAULT;
+
+	for (i = 0; i < count/8; i++)
+		buf[i] = readq(&from[i]);
+
+	/* Copy any remaining bytes */
+	remain = count % 8;
+	if (remain) {
+		u64 tmp = readq(&from[i]);
+
+		memcpy(&buf[i], &tmp, remain);
+	}
+
+	return count;
+}
 
 /*
  * sysfs
@@ -56,7 +81,16 @@ intel_pmt_read(struct file *filp, struct kobject *kobj,
 	if (count > entry->size - off)
 		count = entry->size - off;
 
-	memcpy_fromio(buf, entry->base + off, count);
+	pm_runtime_get_sync(&entry->pdev->dev);
+
+	if (entry->guid == GUID_SPR_PUNIT)
+		/* PUNIT on SPR only supports aligned 64-bit read */
+		count = pmt_memcpy64_fromio(buf, entry->base + off, count);
+	else
+		memcpy_fromio(buf, entry->base + off, count);
+
+	pm_runtime_mark_last_busy(&entry->pdev->dev);
+	pm_runtime_put_autosuspend(&entry->pdev->dev);
 
 	return count;
 }
@@ -87,6 +121,9 @@ intel_pmt_mmap(struct file *filp, struct kobject *kobj,
 	if (io_remap_pfn_range(vma, vma->vm_start, pfn,
 		vsize, vma->vm_page_prot))
 		return -EAGAIN;
+
+	pm_runtime_get_sync(&entry->pdev->dev);
+	pm_runtime_forbid(&entry->pdev->dev);
 
 	return 0;
 }
@@ -132,10 +169,10 @@ static struct class intel_pmt_class = {
 	.dev_groups = intel_pmt_groups,
 };
 
-int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
-			     struct intel_pmt_header *header,
-			     struct device *dev,
-				 struct resource *disc_res)
+static int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
+				    struct intel_pmt_header *header,
+				    struct device *dev,
+				    struct resource *disc_res)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev->parent);
 	u8 bir;
@@ -211,7 +248,6 @@ int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(intel_pmt_populate_entry);
 
 static int intel_pmt_dev_register(struct intel_pmt_entry *entry,
 				  struct intel_pmt_namespace *ns,
@@ -300,7 +336,7 @@ int intel_pmt_dev_create(struct intel_pmt_entry *entry, struct intel_pmt_namespa
 	if (IS_ERR(entry->disc_table))
 		return PTR_ERR(entry->disc_table);
 
-	ret = ns->pmt_header_decode(entry, &header, dev, disc_res);
+	ret = ns->pmt_header_decode(entry, &header, dev);
 	if (ret)
 		return ret;
 

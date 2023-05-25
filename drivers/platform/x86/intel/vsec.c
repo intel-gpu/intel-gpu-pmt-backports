@@ -43,14 +43,12 @@
 #define PMT_XA_LIMIT			XA_LIMIT(PMT_XA_START, PMT_XA_MAX)
 
 static DEFINE_IDA(intel_vsec_ida);
-static DEFINE_IDA(intel_vsec_sdsi_ida);
 static DEFINE_XARRAY_ALLOC(auxdev_array);
 
 static enum intel_vsec_id intel_vsec_allow_list[] = {
 	VSEC_ID_TELEMETRY,
 	VSEC_ID_WATCHER,
 	VSEC_ID_CRASHLOG,
-	VSEC_ID_SDSI,
 };
 
 static const char *intel_vsec_name(enum intel_vsec_id id)
@@ -64,9 +62,6 @@ static const char *intel_vsec_name(enum intel_vsec_id id)
 
 	case VSEC_ID_CRASHLOG:
 		return "crashlog";
-
-	case VSEC_ID_SDSI:
-		return "sdsi";
 
 	default:
 		return NULL;
@@ -113,9 +108,8 @@ static void intel_vsec_dev_release(struct device *dev)
 	kfree(intel_vsec_dev);
 }
 
-int intel_vsec_add_aux(struct pci_dev *pdev, struct device *parent,
-		       struct intel_vsec_device *intel_vsec_dev,
-		       const char *name)
+static int intel_vsec_add_aux(struct pci_dev *pdev, struct intel_vsec_device *intel_vsec_dev,
+			      const char *name)
 {
 	struct auxiliary_device *auxdev = &intel_vsec_dev->auxdev;
 	int ret, id;
@@ -126,12 +120,9 @@ int intel_vsec_add_aux(struct pci_dev *pdev, struct device *parent,
 		return ret;
 	}
 
-	if (!parent)
-		parent = &pdev->dev;
-
 	auxdev->id = ret;
 	auxdev->name = name;
-	auxdev->dev.parent = parent;
+	auxdev->dev.parent = &pdev->dev;
 	auxdev->dev.release = intel_vsec_dev_release;
 
 	ret = auxiliary_device_init(auxdev);
@@ -148,7 +139,7 @@ int intel_vsec_add_aux(struct pci_dev *pdev, struct device *parent,
 		return ret;
 	}
 
-	ret = devm_add_action_or_reset(parent, intel_vsec_remove_aux,
+	ret = devm_add_action_or_reset(&pdev->dev, intel_vsec_remove_aux,
 				       auxdev);
 	if (ret < 0)
 		return ret;
@@ -161,7 +152,6 @@ int intel_vsec_add_aux(struct pci_dev *pdev, struct device *parent,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(intel_vsec_add_aux);
 
 static int intel_vsec_add_dev(struct pci_dev *pdev, struct intel_vsec_header *header,
 			      struct intel_vsec_platform_info *info)
@@ -213,14 +203,9 @@ static int intel_vsec_add_dev(struct pci_dev *pdev, struct intel_vsec_header *he
 	intel_vsec_dev->resource = res;
 	intel_vsec_dev->num_resources = header->num_entries;
 	intel_vsec_dev->info = info;
+	intel_vsec_dev->ida = &intel_vsec_ida;
 
-	if (header->id == VSEC_ID_SDSI)
-		intel_vsec_dev->ida = &intel_vsec_sdsi_ida;
-	else
-		intel_vsec_dev->ida = &intel_vsec_ida;
-
-	return intel_vsec_add_aux(pdev, &pdev->dev, intel_vsec_dev,
-				  intel_vsec_name(header->id));
+	return intel_vsec_add_aux(pdev, intel_vsec_dev, intel_vsec_name(header->id));
 }
 
 static bool intel_vsec_walk_header(struct pci_dev *pdev,
@@ -397,7 +382,7 @@ static void intel_vsec_pci_remove(struct pci_dev *pdev)
 /* TGL info */
 static const struct intel_vsec_platform_info tgl_info = {
 	.quirks = VSEC_QUIRK_NO_WATCHER | VSEC_QUIRK_NO_CRASHLOG |
-		  VSEC_QUIRK_TABLE_SHIFT| VSEC_QUIRK_EARLY_HW,
+		  VSEC_QUIRK_TABLE_SHIFT | VSEC_QUIRK_EARLY_HW,
 };
 
 /* DG1 info */
@@ -435,7 +420,10 @@ static const struct dev_pm_ops intel_vsec_pm_ops = {};
 #define PCI_DEVICE_ID_INTEL_VSEC_DG1		0x490e
 #define PCI_DEVICE_ID_INTEL_VSEC_DG2_G10	0x4f93
 #define PCI_DEVICE_ID_INTEL_VSEC_DG2_G11	0x4f95
+#define PCI_DEVICE_ID_INTEL_VSEC_MTL_M		0x7d0d
+#define PCI_DEVICE_ID_INTEL_VSEC_MTL_S		0xad0d
 #define PCI_DEVICE_ID_INTEL_VSEC_OOBMSM		0x09a7
+#define PCI_DEVICE_ID_INTEL_VSEC_RPL		0xa77d
 #define PCI_DEVICE_ID_INTEL_VSEC_TGL		0x9a0d
 static const struct pci_device_id intel_vsec_pci_ids[] = {
 	{ PCI_DEVICE_DATA(INTEL, VSEC_ADL, &tgl_info) },
@@ -444,7 +432,10 @@ static const struct pci_device_id intel_vsec_pci_ids[] = {
 	{ PCI_DEVICE_DATA(INTEL, VSEC_DG1, &dg1_info) },
 	{ PCI_DEVICE_DATA(INTEL, VSEC_DG2_G10, &dg2_info) },
 	{ PCI_DEVICE_DATA(INTEL, VSEC_DG2_G11, &dg2_info) },
+	{ PCI_DEVICE_DATA(INTEL, VSEC_MTL_M, &(struct intel_vsec_platform_info) {}) },
+	{ PCI_DEVICE_DATA(INTEL, VSEC_MTL_S, &(struct intel_vsec_platform_info) {}) },
 	{ PCI_DEVICE_DATA(INTEL, VSEC_OOBMSM, &(struct intel_vsec_platform_info) {}) },
+	{ PCI_DEVICE_DATA(INTEL, VSEC_RPL, &tgl_info) },
 	{ PCI_DEVICE_DATA(INTEL, VSEC_TGL, &tgl_info) },
 	{ }
 };
@@ -453,7 +444,7 @@ MODULE_DEVICE_TABLE(pci, intel_vsec_pci_ids);
 static pci_ers_result_t intel_vsec_pci_error_detected(struct pci_dev *pdev,
 						      pci_channel_state_t state)
 {
-	pci_channel_state_t status = PCI_ERS_RESULT_NEED_RESET;
+	pci_ers_result_t status = PCI_ERS_RESULT_NEED_RESET;
 
 	dev_info(&pdev->dev, "PCI error detected, state %d", state);
 
@@ -468,7 +459,7 @@ static pci_ers_result_t intel_vsec_pci_error_detected(struct pci_dev *pdev,
 static pci_ers_result_t intel_vsec_pci_slot_reset(struct pci_dev *pdev)
 {
 	struct intel_vsec_device *intel_vsec_dev;
-	pci_channel_state_t status = PCI_ERS_RESULT_DISCONNECT;
+	pci_ers_result_t status = PCI_ERS_RESULT_DISCONNECT;
 	const struct pci_device_id *pci_dev_id;
 	unsigned long index;
 
@@ -481,7 +472,7 @@ static pci_ers_result_t intel_vsec_pci_slot_reset(struct pci_dev *pdev)
 		goto out;
 	}
 
-	status =  PCI_ERS_RESULT_RECOVERED;
+	status = PCI_ERS_RESULT_RECOVERED;
 
 	xa_for_each(&auxdev_array, index, intel_vsec_dev) {
 		/* check if pdev doesn't match */
@@ -499,12 +490,12 @@ out:
 	return status;
 }
 
-void intel_vsec_pci_resume(struct pci_dev *pdev)
+static void intel_vsec_pci_resume(struct pci_dev *pdev)
 {
 	dev_info(&pdev->dev, "Done resuming PCI device\n");
 }
 
-const struct pci_error_handlers intel_vsec_pci_err_handlers = {
+static const struct pci_error_handlers intel_vsec_pci_err_handlers = {
 	.error_detected = intel_vsec_pci_error_detected,
 	.slot_reset = intel_vsec_pci_slot_reset,
 	.resume = intel_vsec_pci_resume,
@@ -514,13 +505,14 @@ static struct pci_driver intel_vsec_pci_driver = {
 	.name = "intel_vsec",
 	.id_table = intel_vsec_pci_ids,
 	.probe = intel_vsec_pci_probe,
-	.remove = intel_vsec_pci_remove,
 	.err_handler = &intel_vsec_pci_err_handlers,
+	.remove = intel_vsec_pci_remove,
 	.driver = {
 #ifdef CONFIG_PM_SLEEP
-		.pm = &intel_vsec_pm_ops,
+	.pm = &intel_vsec_pm_ops,
 #endif
 	},
+
 };
 module_pci_driver(intel_vsec_pci_driver);
 

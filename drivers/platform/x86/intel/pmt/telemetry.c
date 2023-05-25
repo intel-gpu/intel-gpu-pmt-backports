@@ -9,17 +9,16 @@
  */
 
 #include <backport/linux/auxiliary_bus.h>
-#include <linux/kernel.h>
 #include <linux/intel_vsec.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/pci.h>
+#include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/overflow.h>
-#include <linux/pm_runtime.h>
 
 #include "class.h"
-#include "telemetry.h"
 #include "version/module_version.h"
 
 #define TELEM_SIZE_OFFSET	0x0
@@ -33,21 +32,16 @@
 /* Used by client hardware to identify a fixed telemetry entry*/
 #define TELEM_CLIENT_FIXED_BLOCK_GUID	0x10000000
 
+#define NUM_BYTES_QWORD(v)	((v) << 3)
+#define SAMPLE_ID_OFFSET(v)	((v) << 3)
+
+static DEFINE_MUTEX(list_lock);
+
 enum telem_type {
 	TELEM_TYPE_PUNIT = 0,
 	TELEM_TYPE_CRASHLOG,
 	TELEM_TYPE_PUNIT_FIXED,
 };
-
-#define NUM_BYTES_QWORD(v)	((v) << 3)
-#define SAMPLE_ID_OFFSET(v)	((v) << 3)
-
-#define PMT_XA_START		0
-#define PMT_XA_MAX		INT_MAX
-#define PMT_XA_LIMIT		XA_LIMIT(PMT_XA_START, PMT_XA_MAX)
-
-static DEFINE_MUTEX(list_lock);
-static BLOCKING_NOTIFIER_HEAD(telem_notifier);
 
 struct pmt_telem_priv {
 	int				num_entries;
@@ -74,8 +68,7 @@ static bool pmt_telem_region_overlaps(struct intel_pmt_entry *entry,
 
 static int pmt_telem_header_decode(struct intel_pmt_entry *entry,
 				   struct intel_pmt_header *header,
-				   struct device *dev,
-				   struct resource *disc_res)
+				   struct device *dev)
 {
 	void __iomem *disc_table = entry->disc_table;
 
@@ -117,61 +110,6 @@ static struct intel_pmt_namespace pmt_telem_ns = {
 	.xa = &telem_array,
 	.pmt_header_decode = pmt_telem_header_decode,
 };
-
-static DEFINE_XARRAY_ALLOC(auxdev_array);
-
-/* Driver API */
-int pmt_telem_read64(struct pci_dev *pdev, u32 guid, u16 pos, u16 id, u16 count, u64 *data)
-{
-	struct intel_vsec_device *intel_vsec_dev;
-	struct intel_pmt_entry *entry;
-	struct pmt_telem_priv *priv;
-	unsigned long index;
-	bool found = false;
-	int i, inst = 0;
-	u32 offset;
-
-	xa_for_each(&auxdev_array, index, intel_vsec_dev) {
-		if (pdev == intel_vsec_dev->pcidev) {
-			found = true;
-			break;
-		}
-	}
-	if (!found)
-		return -ENODEV;
-
-	priv = auxiliary_get_drvdata(&intel_vsec_dev->auxdev);
-	found = false;
-
-	for (entry = priv->entry, i = 0; i < priv->num_entries; entry++, i++) {
-		if (entry->guid != guid)
-			continue;
-
-		if (++inst == pos) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found)
-		return -ENODEV;
-
-	offset = SAMPLE_ID_OFFSET(id);
-
-	if ((offset + NUM_BYTES_QWORD(count)) > entry->size)
-		return -EINVAL;
-
-	pr_debug("%s: Reading id %d, offset 0x%x, count %d, base %px\n",
-		 __func__, id, SAMPLE_ID_OFFSET(id), count, entry->base);
-
-	pm_runtime_get_sync(&entry->pdev->dev);
-	memcpy_fromio(data, entry->base + offset, NUM_BYTES_QWORD(count));
-	pm_runtime_mark_last_busy(&entry->pdev->dev);
-	pm_runtime_put_autosuspend(&entry->pdev->dev);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(pmt_telem_read64);
 
 /* Called when all users unregister and the device is removed */
 static void pmt_telem_ep_release(struct kref *kref)
@@ -288,17 +226,42 @@ pmt_telem_read(struct telem_endpoint *ep, u32 id, u64 *data, u32 count)
 }
 EXPORT_SYMBOL_GPL(pmt_telem_read);
 
-int pmt_telem_register_notifier(struct notifier_block *nb)
+void pmt_telem_runtime_pm_get(struct telem_endpoint *ep)
 {
-	return blocking_notifier_chain_register(&telem_notifier, nb);
+	pm_runtime_get_sync(&ep->parent->dev);
 }
-EXPORT_SYMBOL(pmt_telem_register_notifier);
+EXPORT_SYMBOL(pmt_telem_runtime_pm_get);
 
-int pmt_telem_unregister_notifier(struct notifier_block *nb)
+void pmt_telem_runtime_pm_put(struct telem_endpoint *ep)
 {
-	return blocking_notifier_chain_unregister(&telem_notifier, nb);
+	pm_runtime_put_sync(&ep->parent->dev);
 }
-EXPORT_SYMBOL(pmt_telem_unregister_notifier);
+EXPORT_SYMBOL(pmt_telem_runtime_pm_put);
+
+struct telem_endpoint *
+pmt_telem_find_and_register_endpoint(struct pci_dev *pcidev, u32 guid, u16 pos)
+{
+	int devid = 0;
+	int inst = 0;
+	int err = 0;
+
+	while ((devid = pmt_telem_get_next_endpoint(devid))) {
+		struct telem_endpoint_info ep_info;
+
+		err = pmt_telem_get_endpoint_info(devid, &ep_info);
+		if (err)
+			return ERR_PTR(err);
+
+		if (ep_info.header.guid == guid && ep_info.pdev == pcidev) {
+			if (inst == pos)
+				return pmt_telem_register_endpoint(devid);
+			++inst;
+		}
+	}
+
+	return ERR_PTR(-ENXIO);
+}
+EXPORT_SYMBOL(pmt_telem_find_and_register_endpoint);
 
 static int pmt_telem_add_endpoint(struct device *dev,
 				  struct pmt_telem_priv *priv,
@@ -338,18 +301,12 @@ static void pmt_telem_remove(struct auxiliary_device *auxdev)
 
 	dev_dbg(&auxdev->dev, "%s\n", __func__);
 
-	// remove the auxdev list
-	xa_destroy(&auxdev_array);
-
 	for (i = 0, entry = priv->entry; i < priv->num_entries; i++, entry++) {
-		blocking_notifier_call_chain(&telem_notifier,
-					     PMT_TELEM_NOTIFY_REMOVE,
-					     &entry->devid);
 		kref_put(&priv->entry[i].ep->kref, pmt_telem_ep_release);
 		dev_dbg(&auxdev->dev, "kref count of ep #%d [%px] is %d\n", i, entry->ep, kref_read(&entry->ep->kref));
 		intel_pmt_dev_destroy(&priv->entry[i], &pmt_telem_ns);
 	}
-}
+};
 
 static int pmt_telem_probe(struct auxiliary_device *auxdev, const struct auxiliary_device_id *id)
 {
@@ -357,7 +314,7 @@ static int pmt_telem_probe(struct auxiliary_device *auxdev, const struct auxilia
 	struct intel_pmt_entry *entry;
 	struct pmt_telem_priv *priv;
 	size_t size;
-	int i, ret, pmt_id;
+	int i, ret;
 
 	size = struct_size(priv, entry, intel_vsec_dev->num_resources);
 	priv = devm_kzalloc(&auxdev->dev, size, GFP_KERNEL);
@@ -366,17 +323,17 @@ static int pmt_telem_probe(struct auxiliary_device *auxdev, const struct auxilia
 
 	auxiliary_set_drvdata(auxdev, priv);
 
-	for (i = 0, entry = priv->entry; i < intel_vsec_dev->num_resources; i++, entry++) {
+	for (i = 0, entry = &priv->entry[priv->num_entries];
+	     i < intel_vsec_dev->num_resources;
+	     i++, entry++) {
 		dev_dbg(&auxdev->dev, "Getting resource %d\n", i);
 		entry->base_adjust = intel_vsec_dev->info->base_adjust;
+
 		ret = intel_pmt_dev_create(entry, &pmt_telem_ns, intel_vsec_dev, i);
 		if (ret < 0)
 			goto abort_probe;
-		if (ret) {
-			/* Skipping this entry. */
-			--entry;
+		if (ret)
 			continue;
-		}
 
 		priv->num_entries++;
 
@@ -386,15 +343,6 @@ static int pmt_telem_probe(struct auxiliary_device *auxdev, const struct auxilia
 
 		dev_dbg(&auxdev->dev, "kref count of ep #%d [%px] is %d\n", i, entry->ep, kref_read(&entry->ep->kref));
 	}
-	// store the auxdev here
-	ret = xa_alloc(&auxdev_array, &pmt_id, intel_vsec_dev, PMT_XA_LIMIT, GFP_KERNEL);
-	if (ret)
-		return ret;
-
-	for (i = 0, entry = priv->entry; i < priv->num_entries; i++, entry++)
-		blocking_notifier_call_chain(&telem_notifier,
-					     PMT_TELEM_NOTIFY_ADD,
-					     &entry->devid);
 
 	return 0;
 
@@ -425,6 +373,7 @@ static void __exit pmt_telem_exit(void)
 {
 	auxiliary_driver_unregister(&pmt_telem_aux_driver);
 	xa_destroy(&telem_array);
+
 }
 module_exit(pmt_telem_exit);
 

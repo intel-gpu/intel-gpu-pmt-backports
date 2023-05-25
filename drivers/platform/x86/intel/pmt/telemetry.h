@@ -2,6 +2,8 @@
 #ifndef _INTEL_PMT_TELEM_H
 #define _INTEL_PMT_TELEM_H
 
+#include <linux/pm_runtime.h>
+
 /* Telemetry types */
 #define PMT_TELEM_TELEMETRY	0
 #define PMT_TELEM_CRASHLOG	1
@@ -87,6 +89,20 @@ int pmt_telem_get_endpoint_info(int devid,
 				struct telem_endpoint_info *info);
 
 /**
+ * pmt_telem_find_and_register_endpoint() - Get a telemetry endpoint from
+ * pci_dev device, guid and pos
+ * @pdev:   PCI device inside the Intel vsec
+ * @guid:   GUID of the telemetry space
+ * @pos:    Instance of the guid in case of multiple instances
+ *
+ * Return:
+ * * endpoint    - On success returns pointer to the telemetry endpoint
+ * * -ENXIO      - telemetry endpoint not found
+ */
+struct telem_endpoint *pmt_telem_find_and_register_endpoint(struct pci_dev *pcidev,
+				u32 guid, u16 pos);
+
+/**
  * pmt_telem_read() - Read qwords from counter sram using sample id
  * @ep:     Telemetry endpoint to be read
  * @id:     The beginning sample id of the metric(s) to be read
@@ -96,6 +112,10 @@ int pmt_telem_get_endpoint_info(int devid,
  * Callers must ensure reads are aligned. When the call returns -ENODEV,
  * the device has been removed and callers should unregister the telemetry
  * endpoint.
+ *
+ * If calling from atomic context must take a runtime_pm reference on
+ * the device by calling pmt_telem_runtime_pm_get first. When done call
+ * pmt_telem_runtim_pm_put to release the reference.
  *
  * Return:
  * * 0           - Success
@@ -107,27 +127,6 @@ int pmt_telem_get_endpoint_info(int devid,
 int pmt_telem_read(struct telem_endpoint *ep, u32 id, u64 *data,
 		   u32 count);
 
-/* Notifiers */
-
-#define PMT_TELEM_NOTIFY_ADD	0
-#define PMT_TELEM_NOTIFY_REMOVE	1
-
-/**
- * pmt_telem_register_notifier() - Receive notification endpoint events
- * @nb:   Notifier block
- *
- * Events:
- *   PMT_TELEM_NOTIFY_ADD   - An endpoint has been added. Notifier data
- *                            is the devid
- *   PMT_TELEM_NOTIF_REMOVE - An endpoint has been removed. Notifier data
- *                            is the devid
- */
-int pmt_telem_register_notifier(struct notifier_block *nb);
-
-/**
- * pmt_telem_unregister_notifier() - Unregister notification of endpoint events
- * @nb:   Notifier block
- *
- */
-int pmt_telem_unregister_notifier(struct notifier_block *nb);
+void pmt_telem_runtime_pm_get(struct telem_endpoint *ep);
+void pmt_telem_runtime_pm_put(struct telem_endpoint *ep);
 #endif

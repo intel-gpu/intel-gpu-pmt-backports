@@ -2,7 +2,7 @@
 #include <linux/version.h>
 #include <osv_version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,17,0) && !SUSE_RELEASE_VERSION_GEQ(15,4,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,17,0) && !SUSE_RELEASE_VERSION_GEQ(15,4,0) && !REDHAT_RELEASE_VERSION_GEQ(8,7,0)
 static inline void *auxiliary_get_drvdata(struct auxiliary_device *auxdev)
 {
 	return dev_get_drvdata(&auxdev->dev);

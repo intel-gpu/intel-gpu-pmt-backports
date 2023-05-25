@@ -6,9 +6,7 @@
 #include <linux/err.h>
 #include <linux/intel_vsec.h>
 #include <linux/io.h>
-#include <linux/ioport.h>
 #include <linux/types.h>
-#include <linux/xarray.h>
 
 #include "telemetry.h"
 
@@ -27,7 +25,6 @@ struct telem_endpoint {
 	struct telem_header	header;
 	struct device		*dev;
 	void __iomem		*base;
-	struct resource		res;
 	bool			present;
 	struct kref		kref;
 };
@@ -60,15 +57,10 @@ struct intel_pmt_namespace {
 	const struct attribute_group *attr_grp;
 	int (*pmt_header_decode)(struct intel_pmt_entry *entry,
 				 struct intel_pmt_header *header,
-				 struct device *dev,
-				 struct resource *disc_res);
+				 struct device *dev);
 };
 
 bool intel_pmt_is_early_client_hw(struct device *dev);
-int intel_pmt_populate_entry(struct intel_pmt_entry *entry,
-			     struct intel_pmt_header *header,
-			     struct device *dev,
-				 struct resource *disc_res);
 int intel_pmt_dev_create(struct intel_pmt_entry *entry,
 			 struct intel_pmt_namespace *ns,
 			 struct intel_vsec_device *dev, int idx);
